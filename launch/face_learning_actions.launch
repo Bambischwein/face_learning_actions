@@ -1,0 +1,11 @@
+<?xml version="1.0" ?>
+
+<launch>
+
+  <node name="camera" pkg="usb_cam" type="usb_cam_node" launch-prefix="xterm -e"/> 
+
+  <node name="FaceDetectionServer" pkg="face_learning_actions" type="FaceDetectionServer" output="screen" launch-prefix="xterm -e" />
+
+  <node name="FaceRecognizingServer" pkg="face_learning_actions" type="FaceRecognizingServer" output="screen"/>
+
+</launch>

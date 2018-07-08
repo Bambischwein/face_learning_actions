@@ -1,0 +1,8 @@
+#goal
+bool known_face
+---
+#result
+bool success
+---
+#feedback
+int32 number_of_face

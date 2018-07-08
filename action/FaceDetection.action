@@ -1,0 +1,8 @@
+#goal
+bool detect_face
+---
+#result
+bool success
+---
+#feedback
+int32 number_of_faces
