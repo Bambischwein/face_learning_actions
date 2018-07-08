@@ -7,6 +7,21 @@
 #include <sensor_msgs/Image.h>
 #include <actionlib/server/simple_action_server.h>
 #include <face_learning_actions/FaceDetectionAction.h>
+#include "opencv2/core.hpp"
+#include "opencv2/face.hpp"
+#include "opencv2/objdetect.hpp"
+#include "opencv2/aruco.hpp"
+#include "std_msgs/String.h"
+
+#include <ros/console.h>
+
+#include <iostream>
+#include <fstream>
+#include <sstream>
+
+using namespace cv;
+using namespace cv::face;
+using namespace std;
 
 class FaceDetectionAction
 {
@@ -30,11 +45,35 @@ public:
   {
   }
 
-  int detectAndDisplay( cv::Mat frame)
+  static void read_csv(const std::string& filename, std::vector<cv::Mat>& images, std::vector<int>& labels, char separator = ';')
   {
-    ROS_INFO_STREAM("Start detect and Display function");
+    ifstream file(filename.c_str(), std::ifstream::in);
+    if (!file)
+      {
+	cout << "keine datei" << file << "aus: " << filename << endl;
+	std::string error_message = "No valid input file was given, please check the given filename.";
+        CV_Error(CV_StsBadArg, error_message);
+      }
+    std::string line, path, classlabel;
+    while (getline(file, line))
+      {
+	std::stringstream liness(line);
+        getline(liness, path, separator);
+        getline(liness, classlabel);
+        if(!path.empty() && !classlabel.empty())
+	  {
+            images.push_back(imread(path, 0));
+            labels.push_back(atoi(classlabel.c_str()));
+	  }
+      }
+  }
+
+  int detectAndDisplay( cv::Mat frame, int im_width, int im_height,Ptr<cv::face::EigenFaceRecognizer> model)
+  {
+    // ROS_INFO_STREAM("Start detect and Display function");
     std::vector<cv::Rect> faces;
     cv::Mat frame_gray;
+    Mat original = frame.clone();
     
     cv::cvtColor( frame, frame_gray, cv::COLOR_BGR2GRAY );
     cv::equalizeHist( frame_gray, frame_gray );
@@ -42,19 +81,53 @@ public:
     face_cascade.detectMultiScale( frame_gray, faces, 1.1, 2, 0|cv::CASCADE_SCALE_IMAGE, cv::Size(80, 80) );
     // ROS_INFO_STREAM("Start work with detected faces count: " << faces.size());
     cv::waitKey(100);
-    for( size_t i = 0; i < faces.size(); i++ )
+    
+    for( int i = 0; i < faces.size(); i++ )
       {
-	cv::Point center( faces[i].x + faces[i].width/2, faces[i].y + faces[i].height/2 );
+	// Process face by face:
+	Rect face_i = faces[i];
+	// Crop the face from the image. So simple with OpenCV C++: !!!
+	Mat face = frame_gray(face_i);
+	Mat face_resized;
+	cv::resize(face, face_resized, Size(im_width, im_height), 1.0, 1.0, INTER_CUBIC);
 
-	cv::rectangle(frame, cv::Point( faces[i].x + faces[i].width + 20, faces[i].y + faces[i].height + 20),
-		      cv::Point(faces[i].x - faces[i].width/2 + 10, faces[i].y - faces[i].height/2), cv::Scalar(255,0, 0));
+	int predicted_label = -1;
+	double predicted_confidence = 0.0;
+	// Get the prediction and associated confidence from the model
+	model->predict(face_resized, predicted_label, predicted_confidence);
+	ROS_INFO_STREAM("Prediction: " << predicted_label << ", Confidence: " << predicted_confidence);
+	int prediction = model->predict(face_resized);
+	rectangle(original, face_i, CV_RGB(0, 255,0), 1);
+	if(predicted_confidence < 5000)
+	  {
+	    string box_text = format("Prediction = %d", prediction);
+	    int pos_x = std::max(face_i.tl().x - 10, 0);
+	    int pos_y = std::max(face_i.tl().y - 10, 0);
+	    putText(original, box_text, Point(pos_x, pos_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(0,255,0), 2.0);
+	  }
+
+
+
+
+
+
+
 	
-	cv::Mat faceROI = frame_gray( faces[i] );
+	// cv::Point center( faces[i].x + faces[i].width/2, faces[i].y + faces[i].height/2 );
+
+	// cv::rectangle(frame, cv::Point( faces[i].x + faces[i].width + 20, faces[i].y + faces[i].height + 20),
+	// 	      cv::Point(faces[i].x - faces[i].width/2 + 10, faces[i].y - faces[i].height/2), cv::Scalar(255,0, 0));
+	
+	// cv::Mat faceROI = frame_gray( faces[i] );
       }
-    cv::imshow( "Capture - Face detection", frame );
+    cv::imshow( "Capture - Face detection", original );
     return faces.size();
   }
 
+  static void trainModel(std::vector<cv::Mat>& images, std::vector<int>& labels, cv::Ptr<cv::face::EigenFaceRecognizer>& model)
+  {
+    model->train(images, labels);
+  }
 
   void goalCB()
   {
@@ -68,9 +141,18 @@ public:
 
     ROS_INFO_STREAM(action_name_ << " accepted goal: " << goal_);
 
-    face_cascade.load("/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml");
+    if(!face_cascade.load("/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml")) // == fn_haar
+      ROS_INFO("FUCK");
+    if(!eyes_cascade.load("/usr/share/opencv/haarcascades/haarcascade_eye_tree_eyeglasses.xml"))
+      ROS_INFO("FUCK");
     
-    eyes_cascade.load("/usr/share/opencv/haarcascades/haarcascade_eye_tree_eyeglasses.xml"); 
+    fn_csv = string("/home/hanna/my_ws/src/face_learning/src/test.csv"); // pfad anpassen!!!
+
+    ROS_INFO("Argumente in Variablen geschrieben");
+    ROS_INFO_STREAM("csv: " << fn_csv);
+
+
+    
   }
 
   void preemptCB()
@@ -86,8 +168,37 @@ public:
     // make sure that the action hasn't been canceled
     if (!as_.isActive())
       return;
-    // ROS_INFO("analysis cb");
 
+    std::vector<cv::Mat> images;
+    std::vector<int> labels;
+    try
+      {
+        read_csv(fn_csv, images, labels);
+      }
+    catch (cv::Exception& e)
+      {
+        cerr << "Error opening file \"" << fn_csv << "\". Reason: " << e.msg << endl;
+        // nothing more we can do
+        exit(1);
+      }
+
+    int im_width = images[0].cols;
+    int im_height = images[0].rows;
+    
+     Ptr<cv::face::EigenFaceRecognizer> model = EigenFaceRecognizer::create();
+
+
+// Let's say we want to keep 10 Eigenfaces and have a threshold value of 10.0
+// int num_components = 0;
+// double threshold = 10.0;
+// Then if you want to have a cv::FaceRecognizer with a confidence threshold,
+// create the concrete implementation with the appropiate parameters:
+// Ptr<cv::face::FaceRecognizer> model = EigenFaceRecognizer::create(num_components, threshold);
+    
+    
+    trainModel(images, labels, model);
+    cv::CascadeClassifier haar_cascade;
+    haar_cascade.load("/usr/share/opencv/haarcascades/haacrcascade_frontalface_default.xml");
     cv_bridge::CvImagePtr cv_ptr;
     try
       {
@@ -98,13 +209,13 @@ public:
 	ROS_ERROR("cv_bridge exception: %s", e.what());
 	return;
       }
-  number_of_faces_ = detectAndDisplay( cv_ptr->image);
+    number_of_faces_ = detectAndDisplay( cv_ptr->image, im_width, im_height, model);
 
-  // if(number_of_faces_ >= 1)
-  //   {
-  //     ROS_INFO_STREAM("finished with: " << number_of_faces_);
-  //     as_.setSucceeded(result_);
-  //   }
+    // if(number_of_faces_ >= 1)
+    //   {
+    //     ROS_INFO_STREAM("finished with: " << number_of_faces_);
+    //     as_.setSucceeded(result_);
+    //   }
     feedback_.number_of_faces=number_of_faces_;
     as_.publishFeedback(feedback_); 
   }
@@ -125,10 +236,9 @@ protected:
   int number_of_faces_;
 
   /** Global variables */
-  std::string face_cascade_name;
-  std::string eyes_cascade_name;
   cv::CascadeClassifier face_cascade;
   cv::CascadeClassifier eyes_cascade;
+  std::string fn_csv;
   cv::VideoCapture capture;
   cv::Mat frame;
   
