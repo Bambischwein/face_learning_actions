@@ -36,7 +36,8 @@ public:
     as_.registerPreemptCallback(boost::bind(&FaceDetectionAction::preemptCB, this));
 
     //subscribe to the data topic of interest
-    image_sub_ = nh_.subscribe<sensor_msgs::Image>( "/camera/image_raw", 1, &FaceDetectionAction::analysisCB, this);
+    // /camera/image_raw
+    image_sub_ = nh_.subscribe<sensor_msgs::Image>( "/kinect2/qhd/image_color", 1, &FaceDetectionAction::analysisCB, this);
 
     as_.start();
   }
@@ -80,7 +81,7 @@ public:
     
     face_cascade.detectMultiScale( frame_gray, faces, 1.1, 2, 0|cv::CASCADE_SCALE_IMAGE, cv::Size(80, 80) );
     // ROS_INFO_STREAM("Start work with detected faces count: " << faces.size());
-    cv::waitKey(100);
+    cv::waitKey(700);
     
     for( int i = 0; i < faces.size(); i++ )
       {
@@ -90,35 +91,28 @@ public:
 	Mat face = frame_gray(face_i);
 	Mat face_resized;
 	cv::resize(face, face_resized, Size(im_width, im_height), 1.0, 1.0, INTER_CUBIC);
-
-	int predicted_label = -1;
+	int prediction = 0;
 	double predicted_confidence = 0.0;
 	// Get the prediction and associated confidence from the model
-	model->predict(face_resized, predicted_label, predicted_confidence);
-	ROS_INFO_STREAM("Prediction: " << predicted_label << ", Confidence: " << predicted_confidence);
-	int prediction = model->predict(face_resized);
+	// model->predict(face_resized, predicted_label, predicted_confidence);
+
+	model->predict(face_resized, prediction, predicted_confidence);
+
+	ROS_INFO_STREAM("Prediction: " << prediction << ", Confidence: " << predicted_confidence);
+		if(prediction > -1)
+		  {
 	rectangle(original, face_i, CV_RGB(0, 255,0), 1);
-	if(predicted_confidence < 5000)
+	string box_text = format("Prediction = %d", prediction);
+	int pos_x = std::max(face_i.tl().x - 10, 0);
+	int pos_y = std::max(face_i.tl().y - 10, 0);
+	putText(original, box_text, Point(pos_x, pos_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(0,255,0), 2.0);
+		  }
+	else
 	  {
-	    string box_text = format("Prediction = %d", prediction);
-	    int pos_x = std::max(face_i.tl().x - 10, 0);
-	    int pos_y = std::max(face_i.tl().y - 10, 0);
-	    putText(original, box_text, Point(pos_x, pos_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(0,255,0), 2.0);
+	    ROS_INFO("not found");
 	  }
 
-
-
-
-
-
-
-	
-	// cv::Point center( faces[i].x + faces[i].width/2, faces[i].y + faces[i].height/2 );
-
-	// cv::rectangle(frame, cv::Point( faces[i].x + faces[i].width + 20, faces[i].y + faces[i].height + 20),
-	// 	      cv::Point(faces[i].x - faces[i].width/2 + 10, faces[i].y - faces[i].height/2), cv::Scalar(255,0, 0));
-	
-	// cv::Mat faceROI = frame_gray( faces[i] );
+	    
       }
     cv::imshow( "Capture - Face detection", original );
     return faces.size();
@@ -185,19 +179,22 @@ public:
     int im_width = images[0].cols;
     int im_height = images[0].rows;
     
-     Ptr<cv::face::EigenFaceRecognizer> model = EigenFaceRecognizer::create();
+    // Ptr<cv::face::EigenFaceRecognizer> model = EigenFaceRecognizer::create();
 
 
-// Let's say we want to keep 10 Eigenfaces and have a threshold value of 10.0
-// int num_components = 0;
-// double threshold = 10.0;
-// Then if you want to have a cv::FaceRecognizer with a confidence threshold,
-// create the concrete implementation with the appropiate parameters:
-// Ptr<cv::face::FaceRecognizer> model = EigenFaceRecognizer::create(num_components, threshold);
     
+    // Let's say we want to keep 10 Eigenfaces and have a threshold value of 10.0
+    int num_components = 0;
+    double threshold = 7000.0;
+    // Then if you want to have a cv::FaceRecognizer with a confidence threshold,
+    // create the concrete implementation with the appropiate parameters:
+    Ptr<cv::face::EigenFaceRecognizer> model = EigenFaceRecognizer::create(num_components, threshold);
+
     
     trainModel(images, labels, model);
     cv::CascadeClassifier haar_cascade;
+
+    
     haar_cascade.load("/usr/share/opencv/haarcascades/haacrcascade_frontalface_default.xml");
     cv_bridge::CvImagePtr cv_ptr;
     try
