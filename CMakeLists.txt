@@ -67,7 +67,7 @@ find_package(OpenCV)
 add_action_files(
    DIRECTORY action
    FILES FaceDetection.action
-   FILES FaceRecognizing.action
+   #FILES FaceLearning.action
  )
 
 ## Generate added messages and services with any dependencies listed here
@@ -138,8 +138,6 @@ include_directories(
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(FaceDetectionServer src/FaceDetectionServer.cpp)
-add_executable(FaceRecognizingServer src/FaceRecognizingServer.cpp)
-
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
 ## target back to the shorter version for ease of user use
@@ -150,17 +148,10 @@ add_executable(FaceRecognizingServer src/FaceRecognizingServer.cpp)
 ## same as for the library above
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(FaceDetectionServer face_learning_actions_gencpp)
-add_dependencies(FaceRecognizingServer face_learning_actions_gencpp)
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(
   FaceDetectionServer
-  ${catkin_LIBRARIES}
-  ${OpenCV_LIBRARIES}
-  )
-
-target_link_libraries(
-  FaceRecognizingServer
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
   )

@@ -1,8 +1,8 @@
 #goal
-bool detect_face
+int32 detection_mode
 ---
 #result
-bool success
+int32 result
 ---
 #feedback
 int32 number_of_faces
