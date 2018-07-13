@@ -1,0 +1,13 @@
+<launch>
+
+
+<arg name="port"            default="1213" />
+<arg name="transport"       default="compressed" />
+
+<!-- start all necesary action server -->
+<node name="web_video_server" pkg="web_video_server" type="web_video_server" output="screen">
+ <param name="port"     type="int"         value="$(arg port)" />
+ <param name="transport" type="string" value="$(arg transport)" />
+</node>
+
+</launch>

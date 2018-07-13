@@ -1,9 +1,8 @@
 #goal
-int32 detection_mode
+int32 save_files
 ---
 #result
-int32 face_id
-string face_name
+int32 result
 ---
 #feedback
 int32 number_of_faces

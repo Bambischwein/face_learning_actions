@@ -14,8 +14,10 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   std_msgs
   cv_bridge
+  image_transport
 )
 find_package(OpenCV)
+
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 
@@ -67,7 +69,7 @@ find_package(OpenCV)
 add_action_files(
    DIRECTORY action
    FILES FaceDetection.action
-   #FILES FaceLearning.action
+   FILES FaceLearning.action
  )
 
 ## Generate added messages and services with any dependencies listed here
@@ -138,6 +140,7 @@ include_directories(
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(FaceDetectionServer src/FaceDetectionServer.cpp)
+add_executable(FaceLearningServer src/FaceLearningServer.cpp)
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
 ## target back to the shorter version for ease of user use
@@ -148,6 +151,7 @@ add_executable(FaceDetectionServer src/FaceDetectionServer.cpp)
 ## same as for the library above
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(FaceDetectionServer face_learning_actions_gencpp)
+add_dependencies(FaceLearningServer face_learning_actions_gencpp)
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(
@@ -155,7 +159,12 @@ target_link_libraries(
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
   )
-  
+
+target_link_libraries(
+  FaceLearningServer
+  ${catkin_LIBRARIES}
+  ${OpenCV_LIBRARIES}
+  )
 
 #############
 ## Install ##
