@@ -82,14 +82,16 @@ public:
     model->train(images, labels);
   }
 
-  
-
   void goalCB()
   {
     ROS_INFO_STREAM(action_name_ << " executing goalCB()");
 
     ROS_INFO_STREAM(action_name_ << " accepted goal: " << goal_);
 
+
+    goal_ = as_.acceptNewGoal()->save_files;
+
+    
     face_cascade.load("/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml");
 
     fn_csv = string("/home/hanna/action_ws/src/face_learning_actions/src/TrainData.csv");
@@ -112,7 +114,8 @@ public:
     std::vector<cv::Mat> images;
     std::vector<int> labels;
     std::vector<string> names;
-    
+
+    // read the stream 
     cv_bridge::CvImagePtr cv_ptr;
     try
       {
@@ -123,8 +126,9 @@ public:
 	ROS_ERROR("cv_bridge exception: %s", e.what());
 	return;
       }
-
-     try
+    
+    // read the csv file
+    try
       {
 	read_csv(fn_csv, images, labels, names);
       }
@@ -135,7 +139,6 @@ public:
 	exit(1);
       }
      
-    // learn a new face
     int im_width = 200;
     int im_height = 200;
       
@@ -178,10 +181,16 @@ public:
     as_.publishFeedback(feedback_);
     feedback_.number_of_faces++;
     ROS_INFO_STREAM("feedback: " << feedback_.number_of_faces);
-    ROS_INFO_STREAM("goal: " << goal_.save_files);
-    if(feedback_.number_of_faces == goal_.save_files)
+    ROS_INFO_STREAM("goal: " << goal_);
+    if(feedback_.number_of_faces == goal_)
       {
+	// ROS_INFO("Success.");
 	as_.setSucceeded();
+      }
+    else
+      {
+	// 	ROS_INFO("No success.");
+	as_.setAborted();
       }
   }
 
@@ -192,7 +201,7 @@ protected:
   actionlib::SimpleActionServer<face_learning_actions::FaceLearningAction> as_;
   std::string action_name_;
 
-  face_learning_actions::FaceLearningGoal goal_;
+int goal_;
   face_learning_actions::FaceLearningFeedback feedback_;
   face_learning_actions::FaceLearningResult result_;
   ros::Subscriber image_sub_;

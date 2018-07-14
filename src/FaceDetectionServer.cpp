@@ -51,7 +51,7 @@ public:
   }
 
 
-static void read_csv(const std::string& filename, std::vector<cv::Mat>& images, std::vector<int>& labels, vector<string>& names, char separator = ';')
+  static void read_csv(const std::string& filename, std::vector<cv::Mat>& images, std::vector<int>& labels, vector<string>& names, char separator = ';')
   {
     ifstream file(filename.c_str(), std::ifstream::in);
     if (!file)
@@ -79,7 +79,7 @@ static void read_csv(const std::string& filename, std::vector<cv::Mat>& images, 
       } 
   }
   
-  void detectAndDisplay( cv::Mat frame, int im_width, int im_height, Ptr<cv::face::EigenFaceRecognizer> model, vector<string> names)
+  bool detectAndDisplay( cv::Mat frame, int im_width, int im_height, Ptr<cv::face::EigenFaceRecognizer> model, vector<string> names)
   {
     std::vector<cv::Rect> faces;
     cv::Mat frame_gray;
@@ -90,6 +90,11 @@ static void read_csv(const std::string& filename, std::vector<cv::Mat>& images, 
     
     face_cascade.detectMultiScale( frame_gray, faces, 1.1, 2, 0|cv::CASCADE_SCALE_IMAGE, cv::Size(80, 80) );
 
+    if(faces.size() == 0)
+      {
+	ROS_INFO("Kein Gesicht gefunden.");
+	return false;
+      }
     cv::waitKey(10);
     for( int i = 0; i < faces.size(); i++ )
       {
@@ -112,6 +117,7 @@ static void read_csv(const std::string& filename, std::vector<cv::Mat>& images, 
 	    putText(original, box_text, Point(pos_x, pos_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(0,255,0), 2.0);
 	    result_.face_id = prediction;
 	    result_.face_name = names[prediction];
+	    goal_ = 1;
 	  }
 	else
 	  {
@@ -124,6 +130,7 @@ static void read_csv(const std::string& filename, std::vector<cv::Mat>& images, 
     
     detector_pub .publish(cv_bridge::CvImage(std_msgs::Header(), "bgr8", original).toImageMsg());
     cv::imshow( "Capture - Face detection", original );
+    return true;
   }
 
   static void trainModel(std::vector<cv::Mat>& images, std::vector<int>& labels, cv::Ptr<cv::face::EigenFaceRecognizer>& model)
@@ -162,6 +169,8 @@ static void read_csv(const std::string& filename, std::vector<cv::Mat>& images, 
     if (!as_.isActive())
       return;
 
+    cv::waitKey(700);
+
     goal_ = 0;
     cv_bridge::CvImagePtr cv_ptr;
     try
@@ -196,24 +205,35 @@ static void read_csv(const std::string& filename, std::vector<cv::Mat>& images, 
 	exit(1);
       }
     
-	int im_width = images[0].cols;
-	int im_height = images[0].rows;
-	trainModel(images, labels, model);
-	cv::CascadeClassifier haar_cascade;
+    int im_width = images[0].cols;
+    int im_height = images[0].rows;
+    trainModel(images, labels, model);
+    cv::CascadeClassifier haar_cascade;
 
-	haar_cascade.load("/usr/share/opencv/haarcascades/haacrcascade_frontalface_default.xml");
+    haar_cascade.load("/usr/share/opencv/haarcascades/haacrcascade_frontalface_default.xml");
 
-	detectAndDisplay( cv_ptr->image, im_width, im_height, model, names);
-
-
-
-	feedback_.number_of_faces=number_of_faces_;
-	as_.publishFeedback(feedback_);
-
-	if(goal_ = -1)
+    if(detectAndDisplay( cv_ptr->image, im_width, im_height, model, names))
+      {
+	if(goal_ == -1)
 	  {
+	    
+	    ROS_INFO("No success.");
 	    as_.setAborted();
 	  }
+	else
+	  {
+	    ROS_INFO("Successed.");
+	    ROS_INFO_STREAM("id: " <<  result_.face_id);
+	    ROS_INFO_STREAM("name: " << result_.face_name);
+	    as_.setSucceeded(result_);
+	  }
+      }
+    else
+      {
+	ROS_INFO("No face found");
+	as_.setPreempted();
+      }
+	
   }
 
 protected:
