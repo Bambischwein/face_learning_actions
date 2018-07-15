@@ -33,14 +33,17 @@ public:
     as_(nh_, name, false),
     action_name_(name)
   {
-    //register the goal and feeback callbacks
+    // Register the goal and feeback callbacks
     as_.registerGoalCallback(boost::bind(&FaceDetectionAction::goalCB, this));
     as_.registerPreemptCallback(boost::bind(&FaceDetectionAction::preemptCB, this));
 
-    //subscribe to the data topic of interest
-    // /kinect2/qhd/image_color , /camera/image_raw /pepper_robot/camera/front/image_raw
+    // Subscribe to the data topic of interest
+    // Some example topics: /kinect2/qhd/image_color , /camera/image_raw /pepper_robot/camera/front/image_raw
     image_sub_ = nh_.subscribe<sensor_msgs::Image>( "/camera/image_raw", 1, &FaceDetectionAction::analysisCB, this);
+
+    
     image_transport::ImageTransport it(nh_);
+    // Publish the stream for the live demo on pepper
     detector_pub = it.advertise("detector_stream", 1000);
     
     as_.start();
@@ -53,6 +56,7 @@ public:
 
   static void read_csv(const std::string& filename, std::vector<cv::Mat>& images, std::vector<int>& labels, vector<string>& names, char separator = ';')
   {
+    // Read image path, id and name from the csv file
     ifstream file(filename.c_str(), std::ifstream::in);
     if (!file)
       {
@@ -81,6 +85,7 @@ public:
   
   bool detectAndDisplay( cv::Mat frame, int im_width, int im_height, Ptr<cv::face::EigenFaceRecognizer> model, vector<string> names)
   {
+
     std::vector<cv::Rect> faces;
     cv::Mat frame_gray;
     Mat original = frame.clone();
@@ -88,46 +93,56 @@ public:
     cv::cvtColor( frame, frame_gray, cv::COLOR_BGR2GRAY );
     cv::equalizeHist( frame_gray, frame_gray );
     
-    face_cascade.detectMultiScale( frame_gray, faces, 1.1, 2, 0|cv::CASCADE_SCALE_IMAGE, cv::Size(80, 80) );
+    // Detect faces    
+    face_cascade.detectMultiScale( frame_gray, faces, 1.1, 2, 0|cv::CASCADE_SCALE_IMAGE, cv::Size(im_width, im_height) );
 
-    if(faces.size() == 0)
-      {
-	ROS_INFO("Kein Gesicht gefunden.");
-	return false;
-      }
+    // if(faces.size() == 0)
+    //   {
+    // 	// Stop if no face is found
+    // 	return false;
+    //   }
     cv::waitKey(10);
+    // Recognize faces
     for( int i = 0; i < faces.size(); i++ )
       {
 	// Process face by face:
 	Rect face_i = faces[i];
-	// Crop the face from the image. So simple with OpenCV C++: !!!
+	// Crop the face from the image
 	Mat face = frame_gray(face_i);
 	Mat face_resized;
 	cv::resize(face, face_resized, Size(im_width, im_height), 1.0, 1.0, INTER_CUBIC);
 	int prediction = 0;
 	double predicted_confidence = 0.0;
+	// Find out id
 	model->predict(face_resized, prediction, predicted_confidence);
 	ROS_INFO_STREAM("Prediction: " << prediction << ", confidence: " << predicted_confidence);
 	if(prediction > -1)
 	  {
+	    // If found, draw arectangle around the found with the name
 	    rectangle(original, face_i, CV_RGB(0, 255,0), 1);
-	    string box_text = format("Prediction = %d", prediction);
+
+	    std::stringstream var;
+	    var << "Prediction = " << names[prediction];
+	    string box_text = var.str();
 	    int pos_x = std::max(face_i.tl().x - 10, 0);
 	    int pos_y = std::max(face_i.tl().y - 10, 0);
 	    putText(original, box_text, Point(pos_x, pos_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(0,255,0), 2.0);
 	    result_.face_id = prediction;
 	    result_.face_name = names[prediction];
+	    ROS_INFO_STREAM("Erkenne: " << names[prediction]);
 	    goal_ = 1;
 	  }
 	else
 	  {
-	    ROS_INFO("No face found");
+	    // Go to learn action because the face is unknown
+	    ROS_INFO("Face unknown");
 	    goal_ = -1;
 	  }
-
+	// cv::waitKey(500);
 	    
       }
     
+    // Publish and show current frame
     detector_pub .publish(cv_bridge::CvImage(std_msgs::Header(), "bgr8", original).toImageMsg());
     cv::imshow( "Capture - Face detection", original );
     return true;
@@ -135,41 +150,32 @@ public:
 
   static void trainModel(std::vector<cv::Mat>& images, std::vector<int>& labels, cv::Ptr<cv::face::EigenFaceRecognizer>& model)
   {
+    // Train the model with the loaded images and the id's
     model->train(images, labels);
   }
 
   void goalCB()
   {
-    ROS_INFO_STREAM(action_name_ << " executing goalCB()");
-    
-    // reset helper variables
-    number_of_faces_ = 0;
-
-    // accept the new goal
+    // Accept the new goal
     goal_ = as_.acceptNewGoal()->detection_mode;
 
-
-    if(face_cascade.load("/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml"))
-    
-      fn_csv = string("/home/hanna/action_ws/src/face_learning_actions/src/TrainData.csv");
-
-    image_database_path = "/home/hanna/action_ws/src/face_learning_actions/src/images/";
+    // Load external files: face-classifier and the csv-file
+    face_cascade.load("/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml");
+    fn_csv = string("/home/hanna/action_ws/src/face_learning_actions/src/TrainData.csv");
   }
 
   void preemptCB()
   {
-    ROS_INFO("%s: Preempted", action_name_.c_str());
-    // set the action state to preempted
+    // Set the action state to preempted if no face on the frame is found
     as_.setPreempted();
   }
 
   void analysisCB(const sensor_msgs::Image::ConstPtr& msg)
   {
-    // make sure that the action hasn't been canceled
+    // Make sure that the action hasn't been canceled
     if (!as_.isActive())
       return;
-
-    cv::waitKey(700);
+    cv::waitKey(200);
 
     goal_ = 0;
     cv_bridge::CvImagePtr cv_ptr;
@@ -182,18 +188,16 @@ public:
 	ROS_ERROR("cv_bridge exception: %s", e.what());
 	return;
       }
-    // find faces; if found face known result = 1
     std::vector<cv::Mat> images;
     std::vector<int> labels;
     std::vector<string> names;
-    
-    int num_components = 1;
-    double threshold = 6000.0;
+    int num_components = 30;
+    double threshold = 7000.0;
     // Then if you want to have a cv::FaceRecognizer with a confidence threshold,
     // create the concrete implementation with the appropiate parameters:
     Ptr<cv::face::EigenFaceRecognizer> model = EigenFaceRecognizer::create(num_components, threshold);
-    // Ptr<cv::face::FisherFaceRecognizer> model = FaceRecognizer::create(num_components, threshold);
 
+    // Read csv and load images, labels and names
     try
       {
 	read_csv(fn_csv, images, labels, names);
@@ -201,36 +205,35 @@ public:
     catch (cv::Exception& e)
       {
 	ROS_INFO_STREAM("Error openening file " << fn_csv << ". Reason: " << e.msg);
-	// nothing more we can do
+	// Nothing more we can do
 	exit(1);
       }
-    
+
+    // Set size of images
     int im_width = images[0].cols;
     int im_height = images[0].rows;
+    // Train the model with the images and id's
     trainModel(images, labels, model);
     cv::CascadeClassifier haar_cascade;
 
-    haar_cascade.load("/usr/share/opencv/haarcascades/haacrcascade_frontalface_default.xml");
-
+    // Run the detection.
+    // If a face is found, set the action to succeeded.
+    // If a face is found but unknown set action to aborted.
+    // If no face is found set the acton to preemted. The action will be called again to wait for faces.
     if(detectAndDisplay( cv_ptr->image, im_width, im_height, model, names))
       {
 	if(goal_ == -1)
 	  {
-	    
-	    ROS_INFO("No success.");
 	    as_.setAborted();
 	  }
 	else
 	  {
-	    ROS_INFO("Successed.");
-	    ROS_INFO_STREAM("id: " <<  result_.face_id);
 	    ROS_INFO_STREAM("name: " << result_.face_name);
 	    as_.setSucceeded(result_);
 	  }
       }
     else
       {
-	ROS_INFO("No face found");
 	as_.setPreempted();
       }
 	
@@ -245,20 +248,17 @@ protected:
 
   face_learning_actions::FaceDetectionFeedback feedback_;
   face_learning_actions::FaceDetectionResult result_;
+
+  // Subscriber and Publisher
   ros::Subscriber image_sub_;
   image_transport::Publisher detector_pub ;
-
-  int goal_;
-  bool success_;
-  int number_of_faces_;
-
-  std::string image_database_path;
-
-  /** Global variables */
+  
+  //  Global variables
   cv::CascadeClassifier face_cascade;
   std::string fn_csv;
   cv::VideoCapture capture;
   cv::Mat frame;
+  int goal_;
   
 };
 

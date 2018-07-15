@@ -9,6 +9,7 @@ from smach_ros import ServiceState
 from face_learning_actions.msg import FaceLearningAction, FaceLearningGoal
 from face_learning_actions.msg import FaceDetectionAction, FaceDetectionGoal
 from pepper_smach.msg import NaoQi_animatedSayAction, NaoQi_animatedSayGoal
+from pepper_smach.msg import NaoQi_openWebsiteAction, NaoQi_openWebsiteGoal
 
 from actionlib import *
 from actionlib_msgs.msg import *
@@ -19,8 +20,8 @@ def main():
     rospy.init_node('SAY_INTRO')
     # Create a SMACH state machine
     sm0 = smach.StateMachine(outcomes=['succeeded','aborted','preempted'])
-    sm0.userdata.face_name = 'du Arschgesicht'
-   
+    sm0.userdata.face_name = 0
+    
     # Open the container
     with sm0:
 
@@ -38,12 +39,7 @@ def main():
                 rospy.loginfo(result.face_name)
                 userdata.face_name = result.face_name
                 return 'succeeded'
-            
-        smach.StateMachine.add('SAY_INTRO',
-                               smach_ros.SimpleActionState('naoqi_animatedSay_server/animatedSay',
-                                                           NaoQi_animatedSayAction,
-                                                           goal = NaoQi_animatedSayGoal(animatedMessage=String(data="Herzlich Willkommen zu meiner Demo Gesichtserkennung."))),
-                               {'succeeded':'FACE_DETECTION'})
+
 
         smach.StateMachine.add('FACE_DETECTION',
                                smach_ros.SimpleActionState('/FaceDetectionServer/',
@@ -52,40 +48,15 @@ def main():
                                                            goal = FaceDetectionGoal(detection_mode=0),
                                                            input_keys=['face_name'],
                                                            output_keys=['face_name']),
-                               transitions={'succeeded':'SAY_HELLO', 'aborted':'SAY_NEW_FACE', 'preempted':'FACE_DETECTION'})
-
-        smach.StateMachine.add('SAY_HELLO',
-                               smach_ros.SimpleActionState('naoqi_animatedSay_server/animatedSay',
-                                                           NaoQi_animatedSayAction,
-                                                           goal_cb=FACE_DETECTION_GOALCB,
-                                                           input_keys=['face_name']),
-                               {'succeeded':'FACE_DETECTION'})
-
-        # smach.StateMachine.add('FACE_DETECTION',
-        #                        smach_ros.SimpleActionState('/FaceDetectionServer/',
-        #                                                    FaceDetectionAction,
-        #                                                    result_cb=FACE_DETECTION_RESULTCB,
-        #                                                    goal = FaceDetectionGoal(detection_mode=0),
-        #                                                    output_keys=['face_name'],
-        #                                                    input_keys=['face_name']),
-        #                        {'succeeded':'SAY_HELLO', 'aborted':'SAY_NEW_FACE'},
-        #                        remapping={'face_name':'userdata_output'})
+                               transitions={'succeeded':'FACE_DETECTION', 'aborted':'FACE_LEARNING'})
+                              
 
         smach.StateMachine.add('FACE_LEARNING',
                                smach_ros.SimpleActionState('/FaceLearningServer/',
                                                            FaceLearningAction,
                                                            goal = FaceLearningGoal(save_files=5)),
-                               {'succeeded':'SAY_HELLO', 'aborted':'FACE_LEARNING'})
-        
-      
-        smach.StateMachine.add('SAY_NEW_FACE',
-                               smach_ros.SimpleActionState('naoqi_animatedSay_server/animatedSay',
-                                                           NaoQi_animatedSayAction,
-                                                           goal = NaoQi_animatedSayGoal(animatedMessage=String(data="Ich habe ein neues Gesicht entdeckt und speichere es."))),
-                               {'succeeded':'FACE_LEARNING'})
-        
-
-
+                               {'succeeded':'FACE_DETECTION', 'aborted':'FACE_LEARNING'})
+            
         # For more examples on how to set goals and process results, see
         # executive_smach/smach_ros/tests/smach_actionlib.py
         # Execute SMACH plan

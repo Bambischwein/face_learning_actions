@@ -1,0 +1,62 @@
+<?xml version="1.0" ?>
+
+<launch>
+  <arg name="nao_ip"              default="$(optenv NAO_IP 149.201.37.46)" />
+  <arg name="nao_port"            default="$(optenv NAO_PORT 9559)" />
+
+  <arg name="roscore_ip"          default="149.201.37.169" />
+  <arg name="network_interface"   default="wlp3s0" />
+
+
+  <include file="$(find face_learning_actions)/launch/face_learning_actions.launch"/>
+
+  <!-- <include file="(find pepper_bringup)/launch/pepper_full.launch"> -->
+  <!--   <arg name="nao_ip" type="str" value="$(arg nao_ip)"/> -->
+  <!--   <arg name="roscore_ip" type="str" value="$(arg roscore_ip)"/> -->
+  <!--   <arg name="network_interface" type="str" value="$(arg network_interface)"/> -->
+  <!-- </include> -->
+
+
+  <include file="$(find pepper_smach)/launch/naoqi_dialog.launch">
+    <arg name="nao_ip" type="str" value="$(arg nao_ip)"/>
+  </include>
+
+  <include file="$(find face_learning_actions)/launch/web_video.launch"/>
+
+  <node name="WebServer" pkg="face_learning_actions" type="start_webServer.sh"/>
+
+  
+
+<!-- start all necesary action server -->
+<!-- <node name="naoqi_openWebsite_server" pkg="pepper_smach" type="naoqi_openWebsite_server" output="screen"> -->
+<!--  <param name="nao_ip"     type="str"         value="$(arg nao_ip)" /> -->
+<!--  <param name="nao_port"   type="str"         value="$(arg nao_port)" /> -->
+<!-- </node> -->
+
+
+<!-- start the statemachine-->
+<!--node name="pepper_openWebsite_sm" pkg="face_learning_actions" type="pepper_openWebsite_sm.py" output="screen"/--> 
+
+  
+</launch>
+
+
+<!--
+
+
+das muss alles gestartet werden: 
+roslaunch face_learning_actions face_learning_actions.launch -> check
+
+roslaunch pepper_bringup pepper_full.launch nao_ip:=149.201.37.46 roscore_ip:=149.201.37.169 network_interface:=wlp3s0 
+
+roslaunch pepper_smach naoqi_dialog.launch nao_ip:=149.201.37.46
+
+
+roslaunch face_learning_actions web_video.launch 
+
+python -m SimpleHTTPServer
+
+roslaunch pepper_smach openWebsite.launch nao_ip:=149.201.37.46
+
+
+-->

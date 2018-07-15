@@ -2,9 +2,33 @@
 
 <launch>
 
-   <node name="camera" pkg="usb_cam" type="usb_cam_node" launch-prefix="xterm -e"/> 
+  <node name="camera" pkg="usb_cam" type="usb_cam_node" launch-prefix="xterm -e"/>
+  
   <node name="FaceDetectionServer" pkg="face_learning_actions" type="FaceDetectionServer" output="screen" />
 
   <node name="FaceLearningServer" pkg="face_learning_actions" type="FaceLearningServer" output="screen"/>
 
+  <!--node name="smach_viewer" pkg="smach_viewer" type="smach_viewer.py" launch-prefix="xterm -e"/-->
+
+  
 </launch>
+
+
+<!--
+
+
+das muss alles gestartet werden: 
+roslaunch face_learning_actions face_learning_actions.launch -> check
+
+roslaunch pepper_bringup pepper_full.launch nao_ip:=149.201.37.46 roscore_ip:=149.201.37.169 network_interface:=wlp3s0 
+
+roslaunch pepper_smach naoqi_dialog.launch nao_ip:=149.201.37.46
+
+roslaunch face_learning_actions web_video.launch 
+
+python -m SimpleHTTPServer
+
+roslaunch pepper_smach openWebsite.launch nao_ip:=149.201.37.46
+
+
+-->

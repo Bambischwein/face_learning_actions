@@ -2,7 +2,8 @@
 int32 save_files
 ---
 #result
-int32 result
+string name
+int32 id
 ---
 #feedback
 int32 number_of_faces

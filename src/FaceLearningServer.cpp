@@ -84,9 +84,9 @@ public:
 
   void goalCB()
   {
-    ROS_INFO_STREAM(action_name_ << " executing goalCB()");
+    // ROS_INFO_STREAM(action_name_ << " executing goalCB()");
 
-    ROS_INFO_STREAM(action_name_ << " accepted goal: " << goal_);
+    // ROS_INFO_STREAM(action_name_ << " accepted goal: " << goal_);
 
 
     goal_ = as_.acceptNewGoal()->save_files;
@@ -95,11 +95,13 @@ public:
     face_cascade.load("/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml");
 
     fn_csv = string("/home/hanna/action_ws/src/face_learning_actions/src/TrainData.csv");
+
+    image_database_path = "/home/hanna/action_ws/src/face_learning_actions/src/images/";
   }
 
   void preemptCB()
   {
-    ROS_INFO("%s: Preempted", action_name_.c_str());
+    // ROS_INFO("%s: Preempted", action_name_.c_str());
     // set the action state to preempted
     as_.setPreempted();
   }
@@ -109,7 +111,7 @@ public:
     // make sure that the action hasn't been canceled
     if (!as_.isActive())
       return;
-    ROS_INFO("analysis cb");
+    // ROS_INFO("analysis cb");
 
     std::vector<cv::Mat> images;
     std::vector<int> labels;
@@ -138,16 +140,18 @@ public:
 	// nothing more we can do
 	exit(1);
       }
-     
+
+
+      if(result_.name.empty())
+      {
+	ROS_INFO("Bitte Namen eintragen: ");
+	cin >> result_.name;
+	result_.id = labels.back() + 1;
+	ROS_INFO_STREAM("id = " << result_.id);
+      }
     int im_width = 200;
     int im_height = 200;
       
-    int latest_label = 0;
-    if(labels.size() > 0)
-      {
-	latest_label = labels.back() + 1;
-	ROS_INFO_STREAM("neues label: " << latest_label);
-      }
     vector<int> compression_params;
     compression_params.push_back(CV_IMWRITE_PNG_COMPRESSION);
     cv::waitKey(200);
@@ -167,29 +171,31 @@ public:
     cv::resize(imCrop, face_resized, Size(im_width, im_height), 1.0, 1.0, INTER_CUBIC);
 	    
     images.push_back(face_resized);
-    labels.push_back(latest_label);
+    labels.push_back(result_.id);
 
     std::stringstream var;
-    var << image_database_path << "IMG00" << latest_label << "_" << feedback_.number_of_faces << ".jpg";
+    var << image_database_path << "IMG00" << result_.id << "_" << feedback_.number_of_faces << ".jpg";
     std::string s = var.str();
     imwrite(s, face_resized, compression_params);
 	    
-    ofstream out("/home/hanna/my_ws/src/face_learning/src/test.csv", ios::app);
+    ofstream out("/home/hanna/action_ws/src/face_learning_actions/src/TrainData.csv", ios::app);
     out <<endl;
-    out << s << ";" << latest_label<< endl;
+    out << s << ";" << result_.id << ";" << result_.name << endl;
 
     as_.publishFeedback(feedback_);
     feedback_.number_of_faces++;
-    ROS_INFO_STREAM("feedback: " << feedback_.number_of_faces);
-    ROS_INFO_STREAM("goal: " << goal_);
+
+    cv::waitKey(200);
     if(feedback_.number_of_faces == goal_)
       {
 	// ROS_INFO("Success.");
+	feedback_.number_of_faces = 0;
+	result_.name = "";
 	as_.setSucceeded();
       }
     else
       {
-	// 	ROS_INFO("No success.");
+	// ROS_INFO("No success.");
 	as_.setAborted();
       }
   }
